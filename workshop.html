@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>仮想プラント最適化チャレンジ — 人力 vs ベイズ最適化</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FBFAF6;
+  --grid:#E7E9E4;
+  --ink:#20242B;
+  --sub:#6B7280;
+  --line:#C9CDC5;
+  --blue:#22519F;        /* 群青:実験 */
+  --blue-soft:#E8EEF9;
+  --green:#1E7F5C;       /* 深緑:ベイズ最適化 */
+  --green-soft:#E6F2ED;
+  --shu:#C43A2B;         /* 朱:最高記録スタンプ */
+  --gold:#9A7B2D;
+  --mono:'IBM Plex Mono', ui-monospace, monospace;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html{font-size:15px;}
+body{
+  font-family:'Zen Kaku Gothic New', 'Hiragino Kaku Gothic ProN', sans-serif;
+  color:var(--ink);
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:24px 24px;
+  min-height:100vh;
+}
+.wrap{max-width:1080px; margin:0 auto; padding:28px 20px 80px;}
+
+/* ---------- ヘッダー ---------- */
+header{border-bottom:3px double var(--ink); padding-bottom:16px; margin-bottom:20px;
+  display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px;}
+.title-block .eyebrow{font-size:.75rem; letter-spacing:.35em; color:var(--sub); font-weight:700;}
+h1{font-family:'Shippori Mincho', serif; font-weight:800; font-size:1.75rem; line-height:1.3; margin-top:4px;}
+h1 .vs{color:var(--shu); font-size:1.1rem; margin:0 .2em;}
+.team-box{display:flex; align-items:center; gap:8px; background:#fff; border:1px solid var(--line);
+  padding:8px 12px; box-shadow:2px 2px 0 rgba(32,36,43,.08);}
+.team-box label{font-size:.8rem; color:var(--sub); font-weight:700;}
+.team-box input{width:70px; font-family:var(--mono); font-size:1rem; padding:4px 6px;
+  border:1px solid var(--line); text-align:center;}
+.team-box button{font-size:.8rem;}
+
+/* ---------- タブ ---------- */
+nav{display:flex; gap:0; margin-bottom:0;}
+nav button{
+  font-family:inherit; font-weight:700; font-size:.95rem; cursor:pointer;
+  padding:10px 22px; background:transparent; border:1px solid var(--line); border-bottom:none;
+  color:var(--sub); position:relative; top:1px;
+}
+nav button.active{background:#fff; color:var(--ink); border-color:var(--ink);}
+nav button .tag{display:inline-block; width:.6em; height:.6em; border-radius:50%; margin-right:.4em;}
+nav button:nth-child(1) .tag{background:var(--blue);}
+nav button:nth-child(2) .tag{background:var(--green);}
+nav button:nth-child(3) .tag{background:var(--shu);}
+main{background:#fff; border:1px solid var(--ink); padding:24px; box-shadow:4px 4px 0 rgba(32,36,43,.10);}
+section{display:none;}
+section.active{display:block;}
+h2{font-family:'Shippori Mincho', serif; font-size:1.25rem; margin-bottom:4px;}
+.lead{color:var(--sub); font-size:.9rem; margin-bottom:18px;}
+
+/* ---------- 共通UI ---------- */
+button.btn{
+  font-family:inherit; font-weight:700; cursor:pointer; font-size:.95rem;
+  padding:10px 18px; border:1px solid var(--ink); background:#fff; color:var(--ink);
+  box-shadow:2px 2px 0 rgba(32,36,43,.2); transition:transform .05s;
+}
+button.btn:active{transform:translate(2px,2px); box-shadow:none;}
+button.btn:disabled{opacity:.35; cursor:not-allowed; box-shadow:none;}
+button.btn.primary{background:var(--blue); border-color:var(--blue); color:#fff;}
+button.btn.green{background:var(--green); border-color:var(--green); color:#fff;}
+button.btn.ghost{border-style:dashed; box-shadow:none;}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:22px;}
+@media(max-width:820px){.grid2{grid-template-columns:1fr;}}
+
+/* ---------- パラメータフォーム ---------- */
+.param{margin-bottom:16px;}
+.param .row1{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;}
+.param .name{font-weight:700; font-size:.92rem;}
+.param .range-note{font-size:.75rem; color:var(--sub); font-family:var(--mono);}
+.param .row2{display:flex; align-items:center; gap:12px;}
+.param input[type=range]{flex:1; accent-color:var(--blue);}
+.param input[type=number]{width:92px; font-family:var(--mono); font-size:1rem; padding:6px 8px;
+  border:1px solid var(--line); text-align:right;}
+.budget{display:flex; align-items:center; gap:10px; margin:14px 0;}
+.budget .bar{flex:1; height:14px; border:1px solid var(--ink); background:#fff; position:relative;}
+.budget .bar i{position:absolute; inset:0; background:var(--blue); transform-origin:left; display:block;}
+.budget .count{font-family:var(--mono); font-weight:600;}
+
+/* ---------- 結果カード ---------- */
+.result-card{border:1px solid var(--ink); padding:14px 16px; margin-top:14px; background:var(--blue-soft); display:none;}
+.result-card.show{display:block;}
+.result-card.bo{background:var(--green-soft);}
+.result-card .nums{display:flex; gap:26px; flex-wrap:wrap;}
+.result-card .nums div b{font-family:var(--mono); font-size:1.5rem; display:block;}
+.result-card .nums div span{font-size:.75rem; color:var(--sub); font-weight:700;}
+.newbest{color:var(--shu); font-weight:700; font-size:.85rem; margin-top:6px;}
+
+/* ---------- ラボノート風テーブル ---------- */
+.notebook{margin-top:8px; max-height:340px; overflow-y:auto; border:1px solid var(--line);}
+table{width:100%; border-collapse:collapse; font-size:.85rem;}
+thead th{position:sticky; top:0; background:var(--ink); color:#fff; font-weight:500;
+  padding:7px 8px; font-size:.75rem; letter-spacing:.05em; text-align:right;}
+thead th:first-child{text-align:center;}
+tbody td{padding:6px 8px; border-bottom:1px solid var(--grid); font-family:var(--mono); text-align:right;}
+tbody td:first-child{text-align:center; color:var(--sub);}
+tbody tr.best td{background:#FBF0EE;}
+.stamp{display:inline-block; border:2px solid var(--shu); color:var(--shu); font-family:'Shippori Mincho',serif;
+  font-weight:800; font-size:.7rem; padding:1px 5px; transform:rotate(-6deg); border-radius:3px;}
+
+/* ---------- チャート ---------- */
+.chart-box{border:1px solid var(--line); background:#fff; margin-top:14px; padding:10px;}
+.chart-title{font-size:.8rem; font-weight:700; color:var(--sub); margin-bottom:4px;}
+svg text{font-family:var(--mono); font-size:10px; fill:var(--sub);}
+
+/* ---------- BO パネル ---------- */
+.bo-steps{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
+.proposal{border:1px dashed var(--green); background:var(--green-soft); padding:14px 16px; margin-top:6px; display:none;}
+.proposal.show{display:block;}
+.proposal h4{font-size:.85rem; color:var(--green); margin-bottom:8px;}
+.proposal .pgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px;}
+.proposal .pgrid div{background:#fff; border:1px solid var(--line); padding:6px 10px;}
+.proposal .pgrid b{font-family:var(--mono); display:block; font-size:1.05rem;}
+.proposal .pgrid span{font-size:.7rem; color:var(--sub); font-weight:700;}
+.pred{font-size:.8rem; color:var(--sub); margin-top:8px; font-family:var(--mono);}
+.explain{background:var(--paper); border-left:4px solid var(--green); padding:10px 14px; font-size:.85rem; margin-bottom:16px; line-height:1.7;}
+.explain.blue{border-left-color:var(--blue);}
+.hint-box{margin-top:16px;}
+.hint-box summary{cursor:pointer; font-size:.85rem; font-weight:700; color:var(--gold);}
+.hint-box ul{margin:8px 0 0 20px; font-size:.85rem; line-height:1.9;}
+
+/* ---------- 比較タブ ---------- */
+.metric-cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin-bottom:6px;}
+.metric{border:1px solid var(--ink); padding:14px; background:#fff;}
+.metric.human{border-top:6px solid var(--blue);}
+.metric.bo{border-top:6px solid var(--green);}
+.metric.verdict{border-top:6px solid var(--shu);}
+.metric b{font-family:var(--mono); font-size:1.7rem; display:block; margin-top:2px;}
+.metric span{font-size:.75rem; color:var(--sub); font-weight:700;}
+.metric small{display:block; font-size:.75rem; color:var(--sub); margin-top:4px;}
+.truth{margin-top:18px;}
+.truth-panel{display:none; margin-top:10px; border:1px solid var(--gold); background:#FCF8EE; padding:14px 16px; font-size:.9rem;}
+.truth-panel.show{display:block;}
+.truth-panel table{font-size:.85rem; margin-top:6px;}
+.truth-panel td, .truth-panel th{border:1px solid var(--line); padding:5px 10px; font-family:var(--mono); text-align:right;}
+.discussion{margin-top:22px; border-top:1px dashed var(--line); padding-top:14px;}
+.discussion h3{font-family:'Shippori Mincho',serif; font-size:1rem; margin-bottom:8px;}
+.discussion ol{margin-left:22px; font-size:.9rem; line-height:2;}
+.legend{display:flex; gap:18px; font-size:.78rem; font-weight:700; margin-top:6px;}
+.legend i{display:inline-block; width:22px; height:3px; vertical-align:middle; margin-right:6px;}
+footer{margin-top:16px; font-size:.75rem; color:var(--sub); text-align:right;}
+.toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff;
+  padding:10px 18px; font-size:.85rem; opacity:0; transition:opacity .3s; pointer-events:none; z-index:50;}
+.toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="title-block">
+    <div class="eyebrow">MATERIALS INFORMATICS WORKSHOP</div>
+    <h1>仮想プラント最適化チャレンジ<br><span style="font-size:1.05rem;">人の勘と経験 <span class="vs">対</span> ベイズ最適化</span></h1>
+  </div>
+  <div class="team-box">
+    <label for="seedInput">チームID</label>
+    <input type="number" id="seedInput" value="1" min="1" max="999">
+    <button class="btn ghost" id="seedApply">適用してリセット</button>
+  </div>
+</header>
+
+<nav>
+  <button class="active" data-tab="human"><span class="tag"></span>① 実験モード</button>
+  <button data-tab="bo"><span class="tag"></span>② ベイズ最適化モード</button>
+  <button data-tab="compare"><span class="tag"></span>③ 結果比較</button>
+</nav>
+
+<main>
+
+<section id="tab-human" class="active">
+  <h2>実験モード</h2>
+
+
+  <div class="explain blue">
+    <b>ミッション:</b> <br>
+    <p class="lead">カーリットの研究所で見つかった<b>新しい物質の合成プロセスを最適化</b>せよ。<br>
+    原料を溶媒A/B中、触媒存在下で混合すると目的物が得られる。高収率・高純度で目的物が得られるように<b>反応温度(℃)</b>・<b>触媒量(mol%)</b>・<b>反応時間(h)</b>・<b>溶媒B比率(%)</b>・<b>圧力(MPa)</b>の5つのパラメータの最適化を行いたい。<br>
+    
+    <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin: 24px 0; font-family: var(--mono); font-weight: 600; font-size: 1.05rem; color: var(--ink); text-align: center;">
+  
+    <div>
+      原料<br>
+      <span style="font-size: 0.75rem; color: var(--sub);">(X + Y)</span>
+    </div>
+  
+    <div style="display: flex; flex-direction: column; align-items: center; min-width: 160px;">
+      <span style="font-size: 0.8rem; padding-bottom: 6px;">触媒 (C mol%)</span>
+      
+      <div style="display: flex; align-items: center; width: 100%;">
+        <div style="height: 1.5px; background-color: var(--ink); flex-grow: 1;"></div>
+        <div style="width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 8px solid var(--ink);"></div>
+      </div>
+      
+      <span style="font-size: 0.8rem; padding-top: 6px;">溶媒B (S %), T °C, t h, P MPa</span>
+    </div>
+  
+    <div>
+      目的物<br>
+      <span style="font-size: 0.75rem; color: var(--sub);">(P)</span>
+    </div>
+
+    </div>
+    </p>
+    1回の実験には実際なら1~2日と数十万円かかる。実験予算は <b>合成20回分</b>。<br>各チームで話し合って、収率×純度の実験スコアを最大化する条件を探せ。限られた20回でどこまで良い条件にたどり着けるか、チームで戦略を立てて挑もう。
+  </div>
+
+  <div class="grid2">
+    <div>
+      <div id="paramForm"></div>
+      <div class="budget">
+        <span style="font-size:.8rem;font-weight:700;">実験予算</span>
+        <div class="bar"><i id="budgetBar"></i></div>
+        <span class="count"><span id="usedCount">0</span> / 20 回</span>
+      </div>
+      <button class="btn primary" id="runHuman">この条件で実験する</button>
+
+      <div class="result-card" id="humanResult">
+        <div class="nums">
+          <div><span>収率</span><b id="rYield">–</b></div>
+          <div><span>純度</span><b id="rPurity">–</b></div>
+          <div><span>実効スコア</span><b id="rScore">–</b></div>
+        </div>
+        <div class="newbest" id="rBest" style="display:none;">★ チーム新記録!</div>
+      </div>
+
+      <details class="hint-box">
+        <summary>ベテラン運転員のメモ</summary>
+        <ul>
+          <li>温度が高すぎると副反応が進んで純度が落ちるらしい。</li>
+          <li>温度と反応時間には関係がある気がする。片方だけ動かしても最適は見つからないかも。</li>
+          <li>触媒は多ければ良いというものではない。</li>
+          </ul>
+      </details>
+    </div>
+
+    <div>
+      <div class="chart-title" style="margin-top:2px;">これまでのベストスコアの推移</div>
+      <div class="chart-box"><svg id="chartHuman" viewBox="0 0 460 240" width="100%"></svg></div>
+      <div class="chart-title" style="margin-top:14px;">実験ノート</div>
+      <div class="notebook">
+        <table>
+          <thead><tr><th>#</th><th>温度<br>°C</th><th>触媒<br>mol%</th><th>時間<br>h</th><th>溶媒B<br>%</th><th>圧力<br>MPa</th><th>収率<br>%</th><th>純度<br>%</th><th>スコア</th><th></th></tr></thead>
+          <tbody id="humanTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-bo">
+  <h2>ベイズ最適化モード</h2>
+  <p class="lead">同じ仮想プラントを、今度はベイズ最適化(ガウス過程回帰+期待改善量 EI)に任せてみる。予算は同じ <b>20回</b>。</p>
+
+  <div class="explain">
+    <b>仕組み:</b> これまでの実験データからガウス過程回帰で「スコアの予測値」と「予測の不確かさ」の地図を作り、<b>期待改善量(EI)</b>が最大になる点=「良さそう、あるいはまだ調べていない」点を次の実験候補として提案する。<b>活用(良い場所を攻める)</b>と<b>探索(未知の場所を調べる)</b>のバランスを数学的に取るのがポイント。
+  </div>
+
+  <div class="bo-steps">
+    <button class="btn green" id="boInit">① 初期実験(ランダム5点)</button>
+    <button class="btn green" id="boSuggest" disabled>② 次の候補を提案させる</button>
+    <button class="btn primary" id="boRun" disabled style="background:var(--green);border-color:var(--green);">③ 提案どおり実験する</button>
+    <button class="btn ghost" id="boAuto" disabled>⏩ 残りを自動実行</button>
+    <button class="btn ghost" id="resetBo">やり直す</button>
+  </div>
+
+  <div class="grid2">
+    <div>
+      <div class="proposal" id="boProposal">
+        <h4>◆ ベイズ最適化からの提案(第 <span id="boIter">–</span> 回目)</h4>
+        <div class="pgrid" id="boPgrid"></div>
+        <div class="pred" id="boPred"></div>
+      </div>
+
+      <div class="result-card bo" id="boResult">
+        <div class="nums">
+          <div><span>収率</span><b id="bYield">–</b></div>
+          <div><span>純度</span><b id="bPurity">–</b></div>
+          <div><span>実効スコア</span><b id="bScore">–</b></div>
+        </div>
+        <div class="newbest" id="bBest" style="display:none;">★ 新記録!</div>
+      </div>
+
+      <div class="budget" style="margin-top:18px;">
+        <span style="font-size:.8rem;font-weight:700;">実験予算</span>
+        <div class="bar"><i id="boBudgetBar" style="background:var(--green);"></i></div>
+        <span class="count"><span id="boUsedCount">0</span> / 20 回</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="chart-title" style="margin-top:2px;">これまでのベストスコアの推移</div>
+      <div class="chart-box"><svg id="chartBo" viewBox="0 0 460 240" width="100%"></svg></div>
+      <div class="chart-title" style="margin-top:14px;">実験ノート(自動記録)</div>
+      <div class="notebook">
+        <table>
+          <thead><tr><th>#</th><th>温度<br>°C</th><th>触媒<br>mol%</th><th>時間<br>h</th><th>溶媒B<br>%</th><th>圧力<br>MPa</th><th>収率<br>%</th><th>純度<br>%</th><th>スコア</th><th></th></tr></thead>
+          <tbody id="boTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-compare">
+  <h2>結果比較 — 人間 vs ベイズ最適化</h2>
+  <p class="lead">同じ実験予算(20回)で、どちらがどれだけ早く・高いスコアに到達したかを比べる。</p>
+
+  <div class="metric-cards">
+    <div class="metric human"><span>人力のベストスコア</span><b id="cmpHumanBest">–</b><small id="cmpHumanN">実験回数: –</small></div>
+    <div class="metric bo"><span>ベイズ最適化のベストスコア</span><b id="cmpBoBest">–</b><small id="cmpBoN">実験回数: –</small></div>
+    <div class="metric verdict"><span>BOが人力ベストを超えた回数</span><b id="cmpCross">–</b><small id="cmpVerdict"></small></div>
+  </div>
+
+  <div class="chart-box">
+    <div class="chart-title">ベストスコアの推移</div>
+    <svg id="chartCompare" viewBox="0 0 920 300" width="100%"></svg>
+    <div class="legend">
+      <span><i style="background:var(--blue);"></i>実験</span>
+      <span><i style="background:var(--green);"></i>ベイズ最適化</span>
+      <span id="legendTruth" style="display:none;"><i style="background:var(--gold);"></i>真の最適値</span>
+    </div>
+  </div>
+
+  <div class="truth">
+    <button class="btn ghost" id="revealTruth">🔍 答え合わせ:真の最適条件を表示</button>
+    <div class="truth-panel" id="truthPanel">
+      <b>このプラント(チームID <span id="truthSeed"></span>)の真の最適条件:</b>
+      <table><thead><tr><th>温度 °C</th><th>触媒 mol%</th><th>時間 h</th><th>溶媒B %</th><th>圧力 MPa</th><th>理論最大スコア</th></tr></thead>
+      <tbody><tr id="truthRow"></tr></tbody></table>
+      <p style="margin-top:8px; font-size:.85rem; line-height:1.8;">この地形には<b>低温側に「偽の山」(局所最適)</b>が仕込まれている。また、温度が高いほど最適な反応時間は短くなる<b>相互作用</b>がある。一変数ずつ振る作戦(OFAT)ではこの相互作用を捉えにくい。</p>
+    </div>
+  </div>
+
+  <div class="discussion">
+    <h3>議論のための問い</h3>
+    <ol>
+      <li>人力チームはどんな戦略を取ったか?一変数ずつ?格子状?勘?</li>
+      <li>ベイズ最適化は何回目で人力の最終ベストを超えたか?それは実験コストに換算するといくら・何日分の節約か?</li>
+      <li>ベイズ最適化の提案履歴を見ると、序盤と終盤で提案の「散らばり方」はどう違うか?</li>
+      <li>実際の研究や製造ではパラメータがもっと増えたり、小数点以下を厳しく算出したりする必要がある。<br>製造業では人間の思考と機械による算出はどちらが有利だろうか?</li>
+      <li>あなたの研究やチームのメンバーの研究においてどんな場面でベイズ最適化が使えるだろうか?</li>
+    </ol>
+  </div>
+</section>
+
+</main>
+<footer>仮想プラントの応答曲面はチームIDから生成される。同じIDなら同じ地形が再現される。<br>
+<details style="display:inline-block; text-align:left; margin-top:4px;"><summary style="cursor:pointer;">運営者向けメモ</summary>
+<span style="display:block; max-width:640px;">動作検証済みの推奨チームID: <b>1, 2, 3, 4, 9, 15, 20, 24, 27</b>(BOが15回以内に高スコアへ到達し、理想的な系統実験戦略ですら追い抜く設定)。他のIDでも動作するが、BOの収束が遅い地形もある。ノイズはBO・人力で独立の乱数列を使うため、BOの結果はチームIDに対して常に同一に再現される。</span></details></footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* =====================================================
+   0. ユーティリティ
+===================================================== */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+let humanRng = mulberry32(1), boRng = mulberry32(1); // applySeedで初期化
+function randn(rng){let u=0,v=0;while(u===0)u=rng();while(v===0)v=rng();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const g=(x,mu,s)=>Math.exp(-((x-mu)**2)/(2*s*s));
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2600);}
+
+/* =====================================================
+   1. 仮想プラント(隠れた真の応答曲面)
+===================================================== */
+const PARAMS=[
+  {key:'T', name:'反応温度',   unit:'°C',   min:60,  max:150, step:1,   dec:0},
+  {key:'C', name:'触媒量',     unit:'mol%', min:0.5, max:10.0, step:0.1, dec:1},
+  {key:'t', name:'反応時間',   unit:'h',    min:0.5, max:24.0, step:0.1, dec:1},
+  {key:'S', name:'溶媒B比率',  unit:'%',    min:0,   max:100, step:1,   dec:0},
+  {key:'P', name:'圧力',       unit:'MPa',  min:0.1, max:5.0,  step:0.1, dec:1},
+];
+const norm=(v,p)=> (v-p.min)/(p.max-p.min);
+const denorm=(x,p)=> p.min + x*(p.max-p.min);
+
+let SEED=1, LAND=null;
+function buildLandscape(seed){
+  const r=mulberry32(seed*7919+13);
+  return {
+    tPeak : 0.58 + (r()-0.5)*0.14,
+    tDecoy: 0.12 + r()*0.08,
+    cOpt  : 0.45 + (r()-0.5)*0.20,
+    sBase : 0.22 + (r()-0.5)*0.16,
+    sSlope: 0.30 + r()*0.20,
+    timeA : 1.05 + (r()-0.5)*0.10,
+    timeB : 0.80 + r()*0.20,
+    pOpt  : 0.60 + (r()-0.5)*0.20,
+  };
+}
+
+// x = [T,C,t,S,P] 正規化済み。noisy=false で真値
+function plant(x, noisy=true, rng=null){
+  const L=LAND;
+  const [T,C,t,S,P]=x;
+  const tOpt = clamp(L.timeA - L.timeB*T, 0.05, 0.95);
+  let y = 24
+    + 34*g(T, L.tPeak, 0.15)
+    + 11*g(T, L.tDecoy, 0.07)
+    + 16*g(t, tOpt, 0.15)
+    + 12*(1-Math.exp(-4.5*C))*(1-0.45*(C-0.1)*(C-0.1)/0.81)*g(C,L.cOpt,0.45)*1.15
+    + 9*g(S, clamp(L.sBase + L.sSlope*C,0,1), 0.17)
+    + 15*g(P, L.pOpt, 0.20);
+  y = clamp(y*0.90, 0, 100);
+  let purity = 99.6 - 8.5*T*T*t - 4.0*Math.max(0,C-0.65)**2*10 - 1.5*Math.max(0,t-0.75)**2*8 - 3.0*Math.max(0,P-0.75)**2*10;
+  purity = clamp(purity, 80, 100);
+  if(noisy && rng){ y=clamp(y+randn(rng)*0.8,0,100); purity=clamp(purity+randn(rng)*0.25,80,100); }
+  const score = y*purity/100;
+  return {y, purity, score};
+}
+
+// 真の最適解(ノイズ無しでランダム探索+局所磨き)
+function findTruth(){
+  const r=mulberry32(SEED*31+7);
+  let best={s:-1,x:null};
+  for(let i=0;i<60000;i++){
+    const x=[r(),r(),r(),r(),r()];
+    const s=plant(x,false).score;
+    if(s>best.s)best={s,x};
+  }
+  let step=0.05;
+  for(let it=0; it<300; it++){
+    let improved=false;
+    for(let d=0; d<5; d++){
+      for(const dir of [1,-1]){
+        const nx=best.x.slice(); nx[d]=clamp(nx[d]+dir*step,0,1);
+        const s=plant(nx,false).score;
+        if(s>best.s){best={s,x:nx};improved=true;}
+      }
+    }
+    if(!improved){step*=0.5; if(step<1e-4)break;}
+  }
+  return best;
+}
+
+/* =====================================================
+   2. ガウス過程回帰 + 期待改善量(EI)
+===================================================== */
+function cholesky(A){
+  const n=A.length, L=Array.from({length:n},()=>new Float64Array(n));
+  for(let i=0;i<n;i++)for(let j=0;j<=i;j++){
+    let s=A[i][j];
+    for(let k=0;k<j;k++)s-=L[i][k]*L[j][k];
+    if(i===j){ if(s<=0)s=1e-10; L[i][j]=Math.sqrt(s);}
+    else L[i][j]=s/L[j][j];
+  }
+  return L;
+}
+function cholSolve(L,b){ // L L^T x = b
+  const n=L.length, y=new Float64Array(n), x=new Float64Array(n);
+  for(let i=0;i<n;i++){let s=b[i];for(let k=0;k<i;k++)s-=L[i][k]*y[k];y[i]=s/L[i][i];}
+  for(let i=n-1;i>=0;i--){let s=y[i];for(let k=i+1;k<n;k++)s-=L[k][i]*x[k];x[i]=s/L[i][i];}
+  return x;
+}
+function kernel(a,b,ls,sf2){
+  let d=0;for(let i=0;i<5;i++){const u=(a[i]-b[i])/ls;d+=u*u;}
+  return sf2*Math.exp(-0.5*d);
+}
+function normCdf(z){ // erf近似
+  const t=1/(1+0.2316419*Math.abs(z));
+  const d=0.3989423*Math.exp(-z*z/2);
+  let p=d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.821256+t*1.330274))));
+  return z>0?1-p:p;
+}
+function gpFit(X,y,ls,sn2){
+  const n=X.length;
+  const mean=y.reduce((a,b)=>a+b,0)/n;
+  const yc=y.map(v=>v-mean);
+  const varY=Math.max(yc.reduce((a,b)=>a+b*b,0)/n, 1e-6);
+  const sf2=varY;
+  const K=Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>kernel(X[i],X[j],ls,sf2)+(i===j?sn2:0)));
+  const L=cholesky(K);
+  const alpha=cholSolve(L,yc);
+  return {X,mean,ls,sf2,L,alpha,n};
+}
+function gpPredict(m,x){
+  const ks=new Float64Array(m.n);
+  for(let i=0;i<m.n;i++)ks[i]=kernel(x,m.X[i],m.ls,m.sf2);
+  let mu=m.mean; for(let i=0;i<m.n;i++)mu+=ks[i]*m.alpha[i];
+  // v = L \ ks
+  const v=new Float64Array(m.n);
+  for(let i=0;i<m.n;i++){let s=ks[i];for(let k=0;k<i;k++)s-=m.L[i][k]*v[k];v[i]=s/m.L[i][i];}
+  let varr=m.sf2; for(let i=0;i<m.n;i++)varr-=v[i]*v[i];
+  return {mu, sd:Math.sqrt(Math.max(varr,1e-9))};
+}
+function suggestEI(X,y,seedR){
+  const best=Math.max(...y), xi=0.01;
+  const r=mulberry32(seedR);
+  const models=[gpFit(X,y,0.15,0.8), gpFit(X,y,0.25,0.8)];
+  let cands=[];
+  for(let i=0;i<4000;i++)cands.push([r(),r(),r(),r(),r()]);
+  const order=y.map((v,i)=>[v,i]).sort((a,b)=>b[0]-a[0]);
+  for(let k=0;k<Math.min(3,order.length);k++){
+    const bx=X[order[k][1]];
+    for(let i=0;i<400;i++)cands.push(bx.map(v=>clamp(v+(r()-0.5)*0.24,0,1)));
+    for(let i=0;i<200;i++)cands.push(bx.map(v=>clamp(v+(r()-0.5)*0.08,0,1)));
+  }
+  let top={ei:-1,x:null,mu:0,sd:0};
+  for(const x of cands){
+    let ei=0,mu=0,sd=0;
+    for(const m of models){
+      const p=gpPredict(m,x);
+      const z=(p.mu-best-xi)/p.sd;
+      ei+=((p.mu-best-xi)*normCdf(z)+p.sd*Math.exp(-z*z/2)*0.3989423)/models.length;
+      mu+=p.mu/models.length; sd+=p.sd/models.length;
+    }
+    if(ei>top.ei)top={ei,x,mu,sd};
+  }
+  return top;
+}
+
+/* =====================================================
+   3. 状態管理・共通描画
+===================================================== */
+let humanHist=[], boHist=[], boPending=null, truthCache=null, truthShown=false;
+let isUnlocked = false; 
+const BUDGET=20;
+const fmtP=(x,p)=>denorm(x,p).toFixed(p.dec);
+
+function bestSoFar(hist){
+  let b=-Infinity; return hist.map(h=>b=Math.max(b,h.score));
+}
+function renderTable(tbodyId, hist){
+  const tb=document.getElementById(tbodyId);
+  const bs=bestSoFar(hist);
+  const bestIdx=hist.length? hist.map(h=>h.score).indexOf(Math.max(...hist.map(h=>h.score))) : -1;
+  tb.innerHTML=hist.map((h,i)=>`<tr class="${i===bestIdx?'best':''}">
+    <td>${i+1}</td>
+    <td>${fmtP(h.x[0],PARAMS[0])}</td><td>${fmtP(h.x[1],PARAMS[1])}</td>
+    <td>${fmtP(h.x[2],PARAMS[2])}</td><td>${fmtP(h.x[3],PARAMS[3])}</td>
+    <td>${fmtP(h.x[4],PARAMS[4])}</td>
+    <td>${h.y.toFixed(1)}</td><td>${h.purity.toFixed(2)}</td>
+    <td><b>${h.score.toFixed(2)}</b></td>
+    <td>${i===bestIdx?'<span class="stamp">最高</span>':''}</td></tr>`).reverse().join('');
+}
+function drawChart(svgId, series, opts={}){
+  const svg=document.getElementById(svgId);
+  const W=svg.viewBox.baseVal.width, H=svg.viewBox.baseVal.height;
+  const pad={l:44,r:14,t:14,b:30};
+  const xmax=opts.xmax||BUDGET;
+  let ymin=40, ymax=100;
+  if(opts.truth) ymax=Math.max(ymax, opts.truth+2);
+  const sx=i=> pad.l + (i)/(xmax)*(W-pad.l-pad.r);
+  const sy=v=> H-pad.b - (v-ymin)/(ymax-ymin)*(H-pad.t-pad.b);
+  let el='';
+  for(let v=40; v<=100; v+=10){
+    el+=`<line x1="${pad.l}" y1="${sy(v)}" x2="${W-pad.r}" y2="${sy(v)}" stroke="#EEF0EA"/>`;
+    el+=`<text x="${pad.l-6}" y="${sy(v)+3}" text-anchor="end">${v}</text>`;
+  }
+  for(let i=0;i<=xmax;i+=5){
+    el+=`<text x="${sx(i)}" y="${H-10}" text-anchor="middle">${i}</text>`;
+  }
+  el+=`<line x1="${pad.l}" y1="${sy(ymin)}" x2="${W-pad.r}" y2="${sy(ymin)}" stroke="#20242B"/>`;
+  el+=`<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${sy(ymin)}" stroke="#20242B"/>`;
+  el+=`<text x="${(W+pad.l)/2}" y="${H-0}" text-anchor="middle" style="font-size:11px;">実験回数</text>`;
+  if(opts.truth){
+    el+=`<line x1="${pad.l}" y1="${sy(opts.truth)}" x2="${W-pad.r}" y2="${sy(opts.truth)}" stroke="#9A7B2D" stroke-dasharray="6 4" stroke-width="1.5"/>`;
+    el+=`<text x="${W-pad.r}" y="${sy(opts.truth)-5}" text-anchor="end" fill="#9A7B2D">真の最適 ${opts.truth.toFixed(1)}</text>`;
+  }
+  for(const s of series){
+    if(!s.data.length)continue;
+    const bs=bestSoFar(s.data);
+    let path=`M ${sx(1)} ${sy(clamp(bs[0],ymin,ymax))}`;
+    for(let i=1;i<bs.length;i++)path+=` L ${sx(i+1)} ${sy(clamp(bs[i],ymin,ymax))}`;
+    el+=`<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round"/>`;
+    bs.forEach((v,i)=>{el+=`<circle cx="${sx(i+1)}" cy="${sy(clamp(v,ymin,ymax))}" r="3" fill="${s.color}"/>`;});
+    s.data.forEach((h,i)=>{el+=`<circle cx="${sx(i+1)}" cy="${sy(clamp(h.score,ymin,ymax))}" r="2" fill="${s.color}" opacity="0.25"/>`;});
+  }
+  svg.innerHTML=el;
+}
+
+/* =====================================================
+   4. 実験モード
+===================================================== */
+const paramForm=document.getElementById('paramForm');
+PARAMS.forEach((p,i)=>{
+  const randVal = (Math.random() * (p.max - p.min) + p.min).toFixed(p.dec);
+  paramForm.insertAdjacentHTML('beforeend',`
+  <div class="param">
+    <div class="row1"><span class="name">${p.name} <small style="color:var(--sub)">(${p.unit})</small></span>
+      <span class="range-note">${p.min} – ${p.max}</span></div>
+    <div class="row2">
+      <input type="range" id="sl${i}" min="${p.min}" max="${p.max}" step="${p.step}" value="${randVal}">
+      <input type="number" id="nm${i}" min="${p.min}" max="${p.max}" step="${p.step}" value="${randVal}">
+    </div>
+  </div>`);
+});
+PARAMS.forEach((p,i)=>{
+  const sl=document.getElementById('sl'+i), nm=document.getElementById('nm'+i);
+  sl.addEventListener('input',()=>nm.value=sl.value);
+  nm.addEventListener('input',()=>sl.value=nm.value);
+});
+function readForm(){
+  return PARAMS.map((p,i)=>{
+    let v=parseFloat(document.getElementById('nm'+i).value);
+    if(isNaN(v))v=(p.min+p.max)/2;
+    v=clamp(v,p.min,p.max);
+    document.getElementById('nm'+i).value=v; document.getElementById('sl'+i).value=v;
+    return norm(v,p);
+  });
+}
+document.getElementById('runHuman').addEventListener('click',()=>{
+  if(humanHist.length>=BUDGET){toast('実験予算(20回)を使い切りました。③結果比較へ!');return;}
+  const x=readForm();
+  const res=plant(x,true,humanRng);
+  const prevBest=humanHist.length?Math.max(...humanHist.map(h=>h.score)):-1;
+  humanHist.push({x,...res});
+  document.getElementById('rYield').textContent=res.y.toFixed(1)+' %';
+  document.getElementById('rPurity').textContent=res.purity.toFixed(2)+' %';
+  document.getElementById('rScore').textContent=res.score.toFixed(2);
+  document.getElementById('rBest').style.display=res.score>prevBest?'block':'none';
+  document.getElementById('humanResult').classList.add('show');
+  updateHuman();
+  if(humanHist.length===BUDGET)toast('予算終了!ベストスコア: '+Math.max(...humanHist.map(h=>h.score)).toFixed(2));
+});
+function updateHuman(){
+  document.getElementById('usedCount').textContent=humanHist.length;
+  document.getElementById('budgetBar').style.transform=`scaleX(${humanHist.length/BUDGET})`;
+  renderTable('humanTbody',humanHist);
+  drawChart('chartHuman',[{data:humanHist,color:'#22519F'}]);
+  document.getElementById('runHuman').disabled=humanHist.length>=BUDGET;
+  updateCompare();
+}
+
+/* =====================================================
+   5. ベイズ最適化モード
+===================================================== */
+const boInitBtn=document.getElementById('boInit'), boSuggestBtn=document.getElementById('boSuggest'),
+      boRunBtn=document.getElementById('boRun'), boAutoBtn=document.getElementById('boAuto');
+
+function boAdd(x){
+  const res=plant(x,true,boRng);
+  const prevBest=boHist.length?Math.max(...boHist.map(h=>h.score)):-1;
+  boHist.push({x,...res});
+  document.getElementById('bYield').textContent=res.y.toFixed(1)+' %';
+  document.getElementById('bPurity').textContent=res.purity.toFixed(2)+' %';
+  document.getElementById('bScore').textContent=res.score.toFixed(2);
+  document.getElementById('bBest').style.display=res.score>prevBest?'block':'none';
+  document.getElementById('boResult').classList.add('show');
+  return res;
+}
+function boButtons(){
+  const n=boHist.length;
+  boInitBtn.disabled = n>0;
+  boSuggestBtn.disabled = n<3 || n>=BUDGET;
+  boRunBtn.disabled = !boPending || n>=BUDGET;
+  boAutoBtn.disabled = n<3 || n>=BUDGET;
+}
+boInitBtn.addEventListener('click',()=>{
+  const r=mulberry32(SEED*101+3);
+  const perm=d=>{const a=[0,1,2,3,4];for(let i=4;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+  const ps=[perm(),perm(),perm(),perm(),perm()];
+  for(let k=0;k<5;k++) boAdd([0,1,2,3,4].map(d=>(ps[d][k]+r())/5));
+  toast('初期5点を実験しました。②で提案を出してみよう');
+  updateBo();
+});
+boSuggestBtn.addEventListener('click',()=>{
+  const X=boHist.map(h=>h.x), y=boHist.map(h=>h.score);
+  boPending=suggestEI(X,y,SEED*1000+boHist.length);
+  document.getElementById('boIter').textContent=boHist.length+1;
+  document.getElementById('boPgrid').innerHTML=PARAMS.map((p,i)=>
+    `<div><span>${p.name}</span><b>${fmtP(boPending.x[i],p)} ${p.unit}</b></div>`).join('');
+  document.getElementById('boPred').textContent=
+    `GPの予測: スコア ${boPending.mu.toFixed(1)} ± ${boPending.sd.toFixed(1)}(不確かさ) / EI = ${boPending.ei.toFixed(3)}`;
+  document.getElementById('boProposal').classList.add('show');
+  boButtons();
+});
+boRunBtn.addEventListener('click',()=>{
+  if(!boPending)return;
+  boAdd(boPending.x);
+  boPending=null;
+  document.getElementById('boProposal').classList.remove('show');
+  updateBo();
+});
+boAutoBtn.addEventListener('click',async ()=>{
+  boAutoBtn.disabled=true; boSuggestBtn.disabled=true; boRunBtn.disabled=true;
+  while(boHist.length<BUDGET){
+    const X=boHist.map(h=>h.x), y=boHist.map(h=>h.score);
+    const s=suggestEI(X,y,SEED*1000+boHist.length);
+    boAdd(s.x);
+    updateBo(false);
+    await new Promise(res=>setTimeout(res,320));
+  }
+  boPending=null;
+  document.getElementById('boProposal').classList.remove('show');
+  updateBo();
+  toast('自動実行完了!ベスト: '+Math.max(...boHist.map(h=>h.score)).toFixed(2));
+});
+document.getElementById('resetBo').addEventListener('click',()=>{
+  if(boHist.length && !confirm('ベイズ最適化の記録を消去します。よろしいですか?'))return;
+  boHist=[]; boPending=null;
+  document.getElementById('boResult').classList.remove('show');
+  document.getElementById('boProposal').classList.remove('show');
+  updateBo();
+});
+function updateBo(buttons=true){
+  document.getElementById('boUsedCount').textContent=boHist.length;
+  document.getElementById('boBudgetBar').style.transform=`scaleX(${boHist.length/BUDGET})`;
+  renderTable('boTbody',boHist);
+  drawChart('chartBo',[{data:boHist,color:'#1E7F5C'}]);
+  if(buttons)boButtons();
+  updateCompare();
+}
+
+/* =====================================================
+   6. 比較タブ
+===================================================== */
+function updateCompare(){
+  const hb=humanHist.length?Math.max(...humanHist.map(h=>h.score)):null;
+  const bb=boHist.length?Math.max(...boHist.map(h=>h.score)):null;
+  document.getElementById('cmpHumanBest').textContent=hb!==null?hb.toFixed(2):'–';
+  document.getElementById('cmpBoBest').textContent=bb!==null?bb.toFixed(2):'–';
+  document.getElementById('cmpHumanN').textContent='実験回数: '+humanHist.length;
+  document.getElementById('cmpBoN').textContent='実験回数: '+boHist.length;
+  let crossTxt='–', verdict='';
+  if(hb!==null && boHist.length){
+    const bs=bestSoFar(boHist);
+    const idx=bs.findIndex(v=>v>=hb);
+    if(idx>=0){crossTxt=(idx+1)+' 回目'; verdict=`人力が${humanHist.length}回かけた記録に、BOは${idx+1}回で到達`;}
+    else {crossTxt='未到達'; verdict='今回はBOがまだ人力ベストに届いていない';}
+  }
+  document.getElementById('cmpCross').textContent=crossTxt;
+  document.getElementById('cmpVerdict').textContent=verdict;
+  drawChart('chartCompare',[
+    {data:humanHist,color:'#22519F'},
+    {data:boHist,color:'#1E7F5C'}
+  ], truthShown?{truth:truthCache.s}:{});
+}
+document.getElementById('revealTruth').addEventListener('click',()=>{
+  if(!truthCache)truthCache=findTruth();
+  truthShown=true;
+  document.getElementById('truthSeed').textContent=SEED;
+  document.getElementById('truthRow').innerHTML=
+    PARAMS.map((p,i)=>`<td>${fmtP(truthCache.x[i],p)}</td>`).join('')+`<td><b>${truthCache.s.toFixed(2)}</b></td>`;
+  document.getElementById('truthPanel').classList.add('show');
+  document.getElementById('legendTruth').style.display='inline';
+  updateCompare();
+});
+
+/* =====================================================
+   7. タブ・シード
+===================================================== */
+document.querySelectorAll('nav button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    const targetTab = b.dataset.tab;
+    
+    if ((targetTab === 'bo' || targetTab === 'compare') && !isUnlocked) {
+      const pw = prompt('このモードに進むにはパスワードを入力してください:');
+      if (pw === 'MI') {
+        isUnlocked = true;
+        toast('ロックを解除しました');
+      } else {
+        if (pw !== null) toast('パスワードが間違っています');
+        return; 
+      }
+    }
+
+    document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('main section').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    document.getElementById('tab-'+targetTab).classList.add('active');
+  });
+});
+
+function applySeed(){
+  SEED=parseInt(document.getElementById('seedInput').value)||1;
+  LAND=buildLandscape(SEED);
+  boRng=mulberry32(SEED*997+42); humanRng=mulberry32(SEED*1997+77);
+  humanHist=[]; boHist=[]; boPending=null; truthCache=null; truthShown=false;
+  document.getElementById('humanResult').classList.remove('show');
+  document.getElementById('boResult').classList.remove('show');
+  document.getElementById('boProposal').classList.remove('show');
+  document.getElementById('truthPanel').classList.remove('show');
+  document.getElementById('legendTruth').style.display='none';
+  updateHuman(); updateBo();
+  toast('チームID '+SEED+' のプラントを準備しました');
+}
+document.getElementById('seedApply').addEventListener('click',()=>{
+  if((humanHist.length||boHist.length) && !confirm('すべての記録を消去して新しいプラントを生成します。よろしいですか?'))return;
+  applySeed();
+});
+SEED=1; LAND=buildLandscape(SEED); boRng=mulberry32(SEED*997+42); humanRng=mulberry32(SEED*1997+77);
+updateHuman(); updateBo();
+</script>
+</body>
+</html>
