@@ -251,7 +251,7 @@ footer{margin-top:16px; font-size:.75rem; color:var(--sub); text-align:right;}
     </div>
 
     <div>
-      <div class="chart-title" style="margin-top:2px;">これまでのベストスコアの推移</div>
+      <div class="chart-title" style="margin-top:2px;">スコアの推移(実線:ベストスコア / 点線:各実験のスコア)</div>
       <div class="chart-box"><svg id="chartHuman" viewBox="0 0 460 240" width="100%"></svg></div>
       <div class="chart-title" style="margin-top:14px;">実験ノート</div>
       <div class="notebook">
@@ -305,7 +305,7 @@ footer{margin-top:16px; font-size:.75rem; color:var(--sub); text-align:right;}
     </div>
 
     <div>
-      <div class="chart-title" style="margin-top:2px;">これまでのベストスコアの推移</div>
+      <div class="chart-title" style="margin-top:2px;">スコアの推移(実線:ベストスコア / 点線:各実験のスコア)</div>
       <div class="chart-box"><svg id="chartBo" viewBox="0 0 460 240" width="100%"></svg></div>
       <div class="chart-title" style="margin-top:14px;">実験ノート(自動記録)</div>
       <div class="notebook">
@@ -329,11 +329,12 @@ footer{margin-top:16px; font-size:.75rem; color:var(--sub); text-align:right;}
   </div>
 
   <div class="chart-box">
-    <div class="chart-title">ベストスコアの推移</div>
+    <div class="chart-title">スコアの推移(実線:ベストスコア / 点線:各実験のスコア)</div>
     <svg id="chartCompare" viewBox="0 0 920 300" width="100%"></svg>
     <div class="legend">
       <span><i style="background:var(--blue);"></i>実験</span>
       <span><i style="background:var(--green);"></i>ベイズ最適化</span>
+      <span><i style="background:repeating-linear-gradient(90deg,var(--sub) 0 5px,transparent 5px 9px); height:2px;"></i>各実験のスコア(点線)</span>
       <span id="legendTruth" style="display:none;"><i style="background:var(--gold);"></i>真の最適値</span>
     </div>
   </div>
@@ -578,11 +579,16 @@ function drawChart(svgId, series, opts={}){
   for(const s of series){
     if(!s.data.length)continue;
     const bs=bestSoFar(s.data);
+    // 各実験のスコア:点線+白抜きマーカー
+    let raw=`M ${sx(1)} ${sy(clamp(s.data[0].score,ymin,ymax))}`;
+    for(let i=1;i<s.data.length;i++)raw+=` L ${sx(i+1)} ${sy(clamp(s.data[i].score,ymin,ymax))}`;
+    el+=`<path d="${raw}" fill="none" stroke="${s.color}" stroke-width="1.5" stroke-dasharray="5 4" opacity="0.65" stroke-linejoin="round"/>`;
+    s.data.forEach((h,i)=>{el+=`<circle cx="${sx(i+1)}" cy="${sy(clamp(h.score,ymin,ymax))}" r="3" fill="#fff" stroke="${s.color}" stroke-width="1.5" opacity="0.85"/>`;});
+    // ベストスコア:実線+塗りつぶしマーカー
     let path=`M ${sx(1)} ${sy(clamp(bs[0],ymin,ymax))}`;
     for(let i=1;i<bs.length;i++)path+=` L ${sx(i+1)} ${sy(clamp(bs[i],ymin,ymax))}`;
     el+=`<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round"/>`;
     bs.forEach((v,i)=>{el+=`<circle cx="${sx(i+1)}" cy="${sy(clamp(v,ymin,ymax))}" r="3" fill="${s.color}"/>`;});
-    s.data.forEach((h,i)=>{el+=`<circle cx="${sx(i+1)}" cy="${sy(clamp(h.score,ymin,ymax))}" r="2" fill="${s.color}" opacity="0.25"/>`;});
   }
   svg.innerHTML=el;
 }
